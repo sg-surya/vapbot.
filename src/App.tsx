@@ -7,7 +7,6 @@ import Dashboard from './pages/Dashboard';
 import Builder from './pages/Builder';
 import PublishedBot from './pages/PublishedBot';
 import { useAuthStore } from './store/authStore';
-import { useThemeStore } from './store/themeStore';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token } = useAuthStore();
@@ -17,17 +16,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const { checkAuth } = useAuthStore();
-  const { theme } = useThemeStore();
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
-
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(theme);
-  }, [theme]);
 
   return (
     <BrowserRouter>
