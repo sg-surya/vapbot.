@@ -13,8 +13,9 @@ interface Message {
   id: string;
   sender: 'bot' | 'user';
   text: string;
-  type?: 'text' | 'image';
+  type?: 'text' | 'image' | 'buttons';
   url?: string;
+  buttons?: Array<{ label: string; handleId: string }>;
 }
 
 export default function ChatPreview({ nodes, edges, onClose }: ChatPreviewProps) {
@@ -27,6 +28,8 @@ export default function ChatPreview({ nodes, edges, onClose }: ChatPreviewProps)
   const [isBotThinking, setIsBotThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialized = useRef(false);
+
+  const [currentButtons, setCurrentButtons] = useState<Array<{ label: string; handleId: string }> | null>(null);
 
   // Initialize chat
   useEffect(() => {
@@ -93,9 +96,18 @@ export default function ChatPreview({ nodes, edges, onClose }: ChatPreviewProps)
         addMessage('bot', 'Sending image...', 'image', url);
         setTimeout(() => moveToNextNode(nodeId), 800);
       }
-      else if (nodeType === 'input') {
+      else if (nodeType === 'buttons') {
         setIsBotThinking(false);
-        setIsWaitingForInput(true);
+        const buttons = (node.data.buttons as Array<{ label: string }>) || [{ label: 'Option 1' }];
+        const msgText = replaceVariables((node.data.text as string) || '');
+        addMessage('bot', msgText, 'text');
+        
+        // Store buttons with their handle IDs
+        const buttonsWithHandles = buttons.map((btn, idx) => ({
+          label: btn.label,
+          handleId: `btn-${idx}`
+        }));
+        setCurrentButtons(buttonsWithHandles);
       } 
       else if (nodeType === 'delay') {
         const seconds = parseInt(node.data.time as string) || 1;
@@ -186,7 +198,34 @@ export default function ChatPreview({ nodes, edges, onClose }: ChatPreviewProps)
     }
   };
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleButtonClick = (buttonHandleId: string) => {
+    if (!currentNodeId) return;
+    
+    // Find the button that was clicked
+    const button = currentButtons?.find(b => b.handleId === buttonHandleId);
+    if (button) {
+      // Show user's choice as a message
+      addMessage('user', button.label);
+    }
+    
+    // Clear buttons
+    setCurrentButtons(null);
+    setIsBotThinking(true);
+    
+    // Find the edge connected to this specific button handle
+    const buttonEdge = edges.find(e => e.source === currentNodeId && e.sourceHandle === buttonHandleId);
+    
+    setTimeout(() => {
+      if (buttonEdge) {
+        executeNode(buttonEdge.target);
+      } else {
+        // Fallback: move to next node if no specific edge found
+        moveToNextNode(currentNodeId);
+      }
+    }, 500);
+  };
+
+  const handleSend = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!inputValue.trim() || !isWaitingForInput || !currentNodeId) return;
 
@@ -256,6 +295,27 @@ export default function ChatPreview({ nodes, edges, onClose }: ChatPreviewProps)
             </div>
           </div>
         ))}
+        
+        {/* Buttons Display */}
+        {currentButtons && currentButtons.length > 0 && (
+          <div className="flex gap-3">
+            <div className="w-7 h-7 rounded-md bg-white/10 text-slate-300 border border-white/10 flex items-center justify-center shrink-0">
+              <Bot className="w-3.5 h-3.5" />
+            </div>
+            <div className="flex flex-wrap gap-2 max-w-[85%]">
+              {currentButtons.map((btn) => (
+                <button
+                  key={btn.handleId}
+                  onClick={() => handleButtonClick(btn.handleId)}
+                  className="px-4 py-2 bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white text-xs font-medium rounded-lg shadow-[0_4px_15px_rgba(99,102,241,0.3)] hover:shadow-[0_4px_20px_rgba(99,102,241,0.5)] hover:scale-105 transition-all active:scale-95"
+                >
+                  {btn.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        
         {isBotThinking && (
           <div className="flex gap-3">
             <div className="w-7 h-7 rounded-md bg-white/10 text-slate-300 border border-white/10 flex items-center justify-center shrink-0">

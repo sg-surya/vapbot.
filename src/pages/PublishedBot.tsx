@@ -24,6 +24,7 @@ export default function PublishedBot() {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [variables, setVariables] = useState<Record<string, any>>({});
   const variablesRef = useRef<Record<string, any>>({});
+  const [currentButtons, setCurrentButtons] = useState<Array<{ label: string; handleId: string }> | null>(null);
   const [isWaitingForInput, setIsWaitingForInput] = useState(false);
   const [isBotThinking, setIsBotThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -97,6 +98,19 @@ export default function PublishedBot() {
         const url = replaceVariables((node.data.url as string) || '');
         addMessage('bot', 'Sending image...', 'image', url);
         setTimeout(() => moveToNextNode(nodeId, currentNodes, currentEdges), 800);
+      }
+      else if (nodeType === 'buttons') {
+        setIsBotThinking(false);
+        const buttons = (node.data.buttons as Array<{ label: string }>) || [{ label: 'Option 1' }];
+        const msgText = replaceVariables((node.data.text as string) || '');
+        addMessage('bot', msgText, 'text');
+        
+        // Store buttons with their handle IDs
+        const buttonsWithHandles = buttons.map((btn, idx) => ({
+          label: btn.label,
+          handleId: `btn-${idx}`
+        }));
+        setCurrentButtons(buttonsWithHandles);
       }
       else if (nodeType === 'input') {
         setIsBotThinking(false);
@@ -178,7 +192,34 @@ export default function PublishedBot() {
     }
   };
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleButtonClick = (buttonHandleId: string) => {
+    if (!currentNodeId) return;
+    
+    // Find the button that was clicked
+    const button = currentButtons?.find(b => b.handleId === buttonHandleId);
+    if (button) {
+      // Show user's choice as a message
+      addMessage('user', button.label);
+    }
+    
+    // Clear buttons
+    setCurrentButtons(null);
+    setIsBotThinking(true);
+    
+    // Find the edge connected to this specific button handle
+    const buttonEdge = edges.find(e => e.source === currentNodeId && e.sourceHandle === buttonHandleId);
+    
+    setTimeout(() => {
+      if (buttonEdge) {
+        executeNode(buttonEdge.target);
+      } else {
+        // Fallback: move to next node if no specific edge found
+        moveToNextNode(currentNodeId, nodes, edges);
+      }
+    }, 500);
+  };
+
+  const handleSend = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!inputValue.trim() || !isWaitingForInput || !currentNodeId) return;
 
@@ -194,6 +235,7 @@ export default function PublishedBot() {
 
     setInputValue('');
     setIsWaitingForInput(false);
+    setIsBotThinking(true);
 
     setTimeout(() => {
       moveToNextNode(currentNodeId, nodes, edges);
@@ -281,6 +323,27 @@ export default function PublishedBot() {
             </div>
           </div>
         ))}
+        
+        {/* Buttons Display */}
+        {currentButtons && currentButtons.length > 0 && (
+          <div className="flex gap-4">
+            <div className="w-9 h-9 rounded-xl bg-white/10 text-slate-300 border border-white/10 flex items-center justify-center shrink-0">
+              <Bot className="w-4 h-4" />
+            </div>
+            <div className="flex flex-wrap gap-3 max-w-[80%]">
+              {currentButtons.map((btn) => (
+                <button
+                  key={btn.handleId}
+                  onClick={() => handleButtonClick(btn.handleId)}
+                  className="px-6 py-3 bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white text-sm font-medium rounded-xl shadow-[0_4px_15px_rgba(99,102,241,0.3)] hover:shadow-[0_4px_20px_rgba(99,102,241,0.5)] hover:scale-105 transition-all active:scale-95"
+                >
+                  {btn.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        
         {isBotThinking && (
           <div className="flex gap-4">
             <div className="w-9 h-9 rounded-xl bg-white/10 text-slate-300 border border-white/10 flex items-center justify-center shrink-0">
